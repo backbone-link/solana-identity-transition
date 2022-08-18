@@ -26,3 +26,5 @@ In both `*.yml` files, *for both hosts*, replace below:
   - primary-unstaked-identity.json (On Primary Node)
   - secondary-unstaked-identity.json (On Secondary Node)
 - `ledger_path` is the path to the ledger dir (where tower is stored on the voting node)
+- `solana-host-primary` match what is defined in the `hosts` file
+- `solana-host-secondary` match what is defined in the `hosts` file
