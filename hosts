@@ -1,0 +1,11 @@
+[solana_validator_server1]
+solana-host-primary
+
+[solana_validator_server1:vars]
+ansible_user=solana_user
+
+[solana_validator_server2]
+solana-host-secondary
+
+[solana_validator_server2:vars]
+ansible_user=solana_user

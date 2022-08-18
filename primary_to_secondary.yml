@@ -1,0 +1,73 @@
+---
+
+# FIRST HOST
+- hosts: solana_validator_server1
+  vars:
+    # CHANGE THESE VARIABLES ACCORDING TO YOUR SETUP
+    solana_cli_path: /path/to/solana/bin
+    solana_keys_path: /path/to/solana/keys
+    ledger_path: /path/to/ledger
+
+  tasks:
+  - name: Get tower filename
+    shell: find {{ledger_path}} -name tower-*.bin
+    register: tower_stdout
+
+  - name: Save tower filename
+    set_fact:
+      tower_filepath: "{{tower_stdout.stdout_lines[0]}}"
+      tower_filename: "{{tower_stdout.stdout_lines[0] | basename}}"
+
+  - name: Transfer Primary Node ID to a Backup-Node (Non-Voting)
+    shell: |
+      solana-validator --ledger {{ledger_path}}/ wait-for-restart-window --identity {{solana_keys_path}}/primary-identity.json --min-idle-time 5 --skip-new-snapshot-check
+      solana-validator --ledger {{ledger_path}}/ set-identity {{solana_keys_path}}/primary-unstaked-identity.json
+    environment:
+      PATH: $PATH:{{solana_cli_path}}
+
+  - name: Move Primary ID symlink to unstaked
+    file:
+      src: "{{solana_keys_path}}/primary-unstaked-identity.json"
+      dest: "{{solana_keys_path}}/primary-identity.json"
+      state: link
+
+  - name: Fetch the tower from Primary Node
+    run_once: yes
+    fetch: src="{{tower_filepath}}" dest=/tmp/ flat=yes
+
+
+# SECOND HOST
+- hosts: solana_validator_server2
+  vars:
+    # CHANGE THESE VARIABLES ACCORDING TO YOUR SETUP
+    solana_cli_path: /path/to/solana/bin
+    solana_keys_path: /path/to/solana/keys
+    ledger_path: /path/to/ledger
+
+    # CHANGE `solana-host-primary` BELOW (MATCH THE CONTENT OF THE host FILE)
+    tower_filename: "{{hostvars['solana-host-primary']['tower_filename']}}"
+
+  tasks:
+  - name: Copy the tower to Secondary Node
+    copy: src=/tmp/{{tower_filename}} dest={{ledger_path}}
+
+  - name: Set Secondary Node ID to staked-identity
+    shell: |
+      solana-validator --ledger {{ledger_path}}/ set-identity --require-tower {{solana_keys_path}}/staked-identity.json
+    environment:
+      PATH: $PATH:{{solana_cli_path}}
+
+  - name: Move Secondary ID symlink to staked
+    file:
+      src: "{{solana_keys_path}}/staked-identity.json"
+      dest: "{{solana_keys_path}}/secondary-identity.json"
+      state: link
+
+- hosts: 127.0.0.1
+  connection: local
+  vars:
+    # CHANGE `solana-host-primary` BELOW (MATCH THE CONTENT OF THE host FILE)
+    tower_filename: "{{hostvars['solana-host-primary']['tower_filename']}}"
+  tasks:
+    - name: /tmp/<tower> Cleanup
+      file: path=/tmp/{{tower_filename}} state=absent
